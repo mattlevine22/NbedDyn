@@ -73,6 +73,26 @@ def computeErrors(target, prediction, dt, thresh):
 		exec("eval_dict['{key}'] = {val}".format(key=var_name, val=var_name))
 	return eval_dict
 
+def computeTestErrors(target, prediction, dt, thresh_list, thresh_norm=1):
+	eval_dict = {}
+
+	prediction = replaceNaN(prediction)
+
+	# MEAN (over-space) SQUARE ERROR
+	mse = np.mean((target-prediction)**2, axis=1)
+	eval_dict['mse'] = mse
+
+	# TIME-AVG of MSE
+	mse_total = np.mean(mse)
+	eval_dict['mse_total'] = mse_total
+
+	# time convergence
+	for thresh in thresh_list:
+		key = 't_valid_{}'.format(thresh)
+		t_valid = dt*getNumberOfAccuratePredictions(mse, thresh*thresh_norm)
+		eval_dict[key] = t_valid
+	return eval_dict
+
 
 def getNumberOfBadPredictions(nerror, tresh=0.05):
 	nerror_bool = nerror > tresh

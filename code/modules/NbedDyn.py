@@ -1,6 +1,7 @@
 from code import *
 import numpy as np
 import torch
+from pdb import set_trace as bp
 def get_NbedDyn_model(params):
         np.random.seed(params['seed'])
         torch.manual_seed(params['seed'])
@@ -10,13 +11,13 @@ def get_NbedDyn_model(params):
                         y_aug = np.random.uniform(size=(params['nb_batch'],params['Batch_size'],params['dim_latent']))-0.5
                         y_aug[:,:,1:] = 0.0
                         self.y_aug = torch.nn.Parameter(torch.from_numpy(y_aug).float())
-                        self.linearCell   = torch.nn.Linear(params['dim_latent']+params['dim_observations'], params['dim_hidden_linear']) 
+                        self.linearCell   = torch.nn.Linear(params['dim_latent']+params['dim_observations'], params['dim_hidden_linear'])
                         self.BlinearCell1 = torch.nn.ModuleList([torch.nn.Linear(params['dim_latent']+params['dim_observations'], 1,bias = False) for i in range(params['bi_linear_layers'])])
                         self.BlinearCell2 = torch.nn.ModuleList([torch.nn.Linear(params['dim_latent']+params['dim_observations'], 1,bias = False) for i in range(params['bi_linear_layers'])])
                         augmented_size    = params['bi_linear_layers'] + params['dim_hidden_linear']
                         self.transLayers = torch.nn.ModuleList([torch.nn.Linear(augmented_size, params['dim_latent']+params['dim_observations'])])
                         self.transLayers.extend([torch.nn.Linear(params['dim_latent']+params['dim_observations'], params['dim_latent']+params['dim_observations']) for i in range(1, params['transition_layers'])])
-                        #self.outputLayer  = torch.nn.Linear(params['dim_latent']+params['dim_input'], params['dim_latent']+params['dim_input'],bias = False) 
+                        #self.outputLayer  = torch.nn.Linear(params['dim_latent']+params['dim_input'], params['dim_latent']+params['dim_input'],bias = False)
                     def forward(self, inp, dt):
                         """
                         In the forward function we accept a Tensor of input data and we must return
@@ -37,7 +38,7 @@ def get_NbedDyn_model(params):
                         grad = aug_vect#self.outputLayer(aug_vect)
                         return grad, aug_inp
         model  = FC_net(params)
-        
+
         class INT_net(torch.nn.Module):
                 def __init__(self, params):
                     super(INT_net, self).__init__()
@@ -47,32 +48,42 @@ def get_NbedDyn_model(params):
                         k1, aug_inp   = self.Dyn_net(inp,dt)
                         inp_k2 = inp + 0.5*dt*k1
                         k2, tmp   = self.Dyn_net(inp_k2,dt)
-                        inp_k3 = inp + 0.5*dt*k2       
+                        inp_k3 = inp + 0.5*dt*k2
                         k3, tmp   = self.Dyn_net(inp_k3,dt)
-                        inp_k4 = inp + dt*k3          
-                        k4, tmp   = self.Dyn_net(inp_k4,dt)            
-                        pred = aug_inp +dt*(k1+2*k2+2*k3+k4)/6 
+                        inp_k4 = inp + dt*k3
+                        k4, tmp   = self.Dyn_net(inp_k4,dt)
+                        pred = aug_inp +dt*(k1+2*k2+2*k3+k4)/6
                         return pred, k1, inp, aug_inp
         modelRINN = INT_net(params)
         return model, modelRINN
-def train_NbedDyn_model_L63(params,model,modelRINN,X_train,Grad_t):    
+def train_NbedDyn_model_L63(params,model,modelRINN,X_train,Grad_t):
         dt = params['dt_integration']
         aug_inp_data = []
         x = torch.from_numpy(X_train).float()
         z = torch.from_numpy(Grad_t).float()
-        
-        
+
+
         criterion = torch.nn.MSELoss(reduction='none')
-        
+
         if params['pretrained'] :
-            modelRINN.load_state_dict(torch.load(path + file_name +'.pt'))
+            modelRINN.load_state_dict(torch.load(params['path'] + params['file_name']+'.pt'))
+
+
+        try:
+            modelRINN.load_state_dict(torch.load(params['path'] + params['file_name']+'.pt'))
+            print('Loaded trained model!')
+            return model, modelRINN, aug_inp_data
+        except:
+            print('Training model...')
+            pass
+
         optimizer = torch.optim.Adam(model.parameters())
-        
+
         for param_group in optimizer.param_groups:
-                print(param_group['lr'])
+                print('lr =', param_group['lr'])
         for param_group in optimizer.param_groups:
-                param_group['lr'] = 0.1      
-        
+                param_group['lr'] = 0.1
+
         for t in range(0,params['ntrain'][0]):
             for b in range(params['nb_batch']):
                 # Forward pass: Compute predicted y by passing x to the model
@@ -98,7 +109,7 @@ def train_NbedDyn_model_L63(params,model,modelRINN,X_train,Grad_t):
                     param_group['lr'] = 0.01
             if t>5500:
                 for param_group in optimizer.param_groups:
-                    param_group['lr'] = 0.001 
+                    param_group['lr'] = 0.001
 
         for param_group in optimizer.param_groups:
                 param_group['lr'] = 0.001
@@ -126,22 +137,22 @@ def train_NbedDyn_model_SLA(params,model,modelRINN,X_train,Grad_t):
         aug_inp_data = []
         x = torch.from_numpy(X_train).float()
         z = torch.from_numpy(Grad_t).float()
-        
-        
+
+
         criterion = torch.nn.MSELoss(reduction='none')
-        
+
         if params['pretrained'] :
-            modelRINN.load_state_dict(torch.load(path + file_name+'.pt'))
+            modelRINN.load_state_dict(torch.load(params['path'] + params['file_name']+'.pt'))
         optimizer = torch.optim.Adam(model.parameters())
-        
+
         for param_group in optimizer.param_groups:
-                print(param_group['lr'])
+                print('lr = ', param_group['lr'])
         for param_group in optimizer.param_groups:
-                param_group['lr'] = 0.001      
-        
+                param_group['lr'] = 0.001
+
         for t in range(params['ntrain'][0]):
             for b in range(params['nb_batch']):
-                optimizer.zero_grad()      
+                optimizer.zero_grad()
                 inp_concat = torch.cat((x[b,:,:], modelRINN.Dyn_net.y_aug[b,:,:]), dim=1)
                 pred1, grad1, inp, aug_inp = modelRINN(inp_concat,dt)
                 if params['get_latent_train']:
@@ -156,24 +167,24 @@ def train_NbedDyn_model_SLA(params,model,modelRINN,X_train,Grad_t):
                 optimizer.step()
         torch.save(modelRINN.state_dict(), params['path'] + params['file_name']+'.pt')
         return model, modelRINN, aug_inp_data
-def train_NbedDyn_model_Linear(params,model,modelRINN,X_train,Grad_t):    
+def train_NbedDyn_model_Linear(params,model,modelRINN,X_train,Grad_t):
         dt = params['dt_integration']
         aug_inp_data = []
         x = torch.from_numpy(X_train).float()
         z = torch.from_numpy(Grad_t).float()
-        
-        
+
+
         criterion = torch.nn.MSELoss(reduction='none')
-        
+
         if params['pretrained'] :
-            modelRINN.load_state_dict(torch.load(path + file_name+'.pt'))
+            modelRINN.load_state_dict(torch.load(params['path'] + params['file_name']+'.pt'))
         optimizer = torch.optim.Adam(model.parameters())
-        
+
         for param_group in optimizer.param_groups:
-                print(param_group['lr'])
+                print('lr = ', param_group['lr'])
         for param_group in optimizer.param_groups:
-                param_group['lr'] = 0.1      
-        
+                param_group['lr'] = 0.1
+
         for t in range(params['ntrain'][0]):
             # Forward pass: Compute predicted y by passing x to the model
             for b in range(params['nb_batch']):
@@ -193,4 +204,3 @@ def train_NbedDyn_model_Linear(params,model,modelRINN,X_train,Grad_t):
                 optimizer.step()
         torch.save(modelRINN.state_dict(), params['path'] + params['file_name']+'.pt')
         return model, modelRINN, aug_inp_data
-    

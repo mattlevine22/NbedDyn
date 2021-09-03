@@ -30,6 +30,15 @@ color_dict = dict(six.iteritems(colors.cnames))
 
 import pdb
 
+def make_time_plot(df, x_name='t_warmup', y_name='mse_total'):
+	colors = {'EnKF': 'orange', 'ad hoc': 'blue',
+			  'True': 'black', '3DVAR': 'green',
+			  'knn': 'purple',
+			  'torch.opt': 'magenta'}
+
+
+
+
 def plot_trajectories(times, traj_dict, fig_path):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12,6))
     line_vec = {'EnKF': ':', 'Ad hoc': '--', '3DVAR': '-.', '3DVAR pred': '-.'}
@@ -44,6 +53,7 @@ def plot_trajectories(times, traj_dict, fig_path):
     ax.set_xlabel('time')
     ax.legend()
     plt.savefig(fig_path)
+    plt.close()
 
 def plot_assimilation_residual_statistics(res, fig_path):
     # plot sequence
@@ -71,6 +81,8 @@ def plot_assimilation_residual_statistics(res, fig_path):
         for j in range(n_vars): # col
             ax[i,j].set_yscale('symlog')
     plt.savefig(fig_path + '_ylog')
+
+    plt.close()
 
 def plot_loss(times, loss, fig_path):
     # plot sequence
@@ -114,6 +126,8 @@ def plot_assimilation_errors(times, error_dict, eps, fig_path):
 
     ax.set_xscale('log')
     plt.savefig(fig_path + '_ylog_xlog')
+
+    plt.close()
 
 
 
@@ -227,7 +241,7 @@ def new_summary(df, fig_path, hue='Model', style='Uses $f_0$', x="$\epsilon$", y
     matplotlib.rc('font', **font)
 
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=figsize)
-    sns.lineplot(ax=ax, data=df, estimator=estimator, ci=ci, x=x, y=y, style=style, hue=hue, err_style='bars', linewidth=4)
+    sns.lineplot(ax=ax, data=df, estimator=estimator, markers=True, markersize=14, ci=ci, x=x, y=y, style=style, hue=hue, err_style='band', linewidth=4)
     if ylabel:
         ax.set_ylabel(ylabel)
     if xlabel:

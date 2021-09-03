@@ -46,7 +46,10 @@ class ENKF(object):
 				obs_noise_sd_assumed_3dvar=0.1,
 				obs_noise_sd_true=0,
 				state_noise_sd=0,
-				s_perturb_obs=True):
+				s_perturb_obs=True,
+				rng_seed=0):
+
+		np.random.seed(rng_seed)
 
 
 		self.y_obs = y_obs # define the data
