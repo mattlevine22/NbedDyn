@@ -2,12 +2,14 @@ from code import *
 import numpy as np
 import torch
 from pdb import set_trace as bp
-def get_NbedDyn_model(params):
+
+def get_NbedDyn_model(params, use_true_model=False):
         np.random.seed(params['seed'])
         torch.manual_seed(params['seed'])
         class FC_net(torch.nn.Module):
                     def __init__(self, params):
                         super(FC_net, self).__init__()
+                        self.use_true_model = use_true_model
                         y_aug = np.random.uniform(size=(params['nb_batch'],params['Batch_size'],params['dim_latent']))-0.5
                         y_aug[:,:,1:] = 0.0
                         self.y_aug = torch.nn.Parameter(torch.from_numpy(y_aug).float())
@@ -18,7 +20,35 @@ def get_NbedDyn_model(params):
                         self.transLayers = torch.nn.ModuleList([torch.nn.Linear(augmented_size, params['dim_latent']+params['dim_observations'])])
                         self.transLayers.extend([torch.nn.Linear(params['dim_latent']+params['dim_observations'], params['dim_latent']+params['dim_observations']) for i in range(1, params['transition_layers'])])
                         #self.outputLayer  = torch.nn.Linear(params['dim_latent']+params['dim_input'], params['dim_latent']+params['dim_input'],bias = False)
+
                     def forward(self, inp, dt):
+                        if self.use_true_model:
+                            grad, aug_inp = self.forward_true(inp, dt)
+                        else:
+                            grad, aug_inp = self.forward_approx(inp, dt)
+                        return grad, aug_inp
+
+
+                    def forward_true(self, inp, dt):
+                        if inp.shape[-1]<params['dim_latent']+params['dim_observations']:
+                            S = torch.cat((inp, self.y_aug), dim=1)
+                        else:
+                            S = inp
+
+                        sigma = 10.0
+                        rho = 28.0
+                        beta = 8.0/3
+
+                        x_1 = sigma*(S[:,1]-S[:,0])
+                        x_2 = S[:,0]*(rho-S[:,2])-S[:,1]
+                        x_3 = S[:,0]*S[:,1] - beta*S[:,2]
+                        grad  = torch.stack([x_1,x_2,x_3]).T
+
+                        return grad, S
+
+
+                    def forward_approx(self, inp, dt):
+                        print('approx Forward')
                         """
                         In the forward function we accept a Tensor of input data and we must return
                         a Tensor of output data. We can use Modules defined in the constructor as
@@ -43,6 +73,9 @@ def get_NbedDyn_model(params):
                 def __init__(self, params):
                     super(INT_net, self).__init__()
         #            self.add_module('Dyn_net',FC_net(params))
+                    # if self.use_true_model:
+                    #     self.Dyn_net = model.forward_true
+                    # else:
                     self.Dyn_net = model
                 def forward(self, inp, dt):
                         k1, aug_inp   = self.Dyn_net(inp,dt)
