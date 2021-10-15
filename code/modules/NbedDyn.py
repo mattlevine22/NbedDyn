@@ -48,7 +48,6 @@ def get_NbedDyn_model(params, use_true_model=False):
 
 
                     def forward_approx(self, inp, dt):
-                        print('approx Forward')
                         """
                         In the forward function we accept a Tensor of input data and we must return
                         a Tensor of output data. We can use Modules defined in the constructor as
