@@ -31,10 +31,10 @@ color_dict = dict(six.iteritems(colors.cnames))
 import pdb
 
 def make_time_plot(df, x_name='t_warmup', y_name='mse_total'):
-	colors = {'EnKF': 'orange', 'ad hoc': 'blue',
-			  'True': 'black', '3DVAR': 'green',
-			  'knn': 'purple',
-			  'torch.opt': 'magenta'}
+    colors = {'EnKF': 'orange', 'ad hoc': 'blue',
+      'True': 'black', '3DVAR': 'green',
+      'knn': 'purple',
+      'torch.opt': 'magenta'}
 
 
 
@@ -84,28 +84,36 @@ def plot_assimilation_residual_statistics(res, fig_path):
 
     plt.close()
 
-def plot_loss(times, loss, fig_path):
+def plot_loss(loss, fig_path, times=None):
     # plot sequence
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12,6))
-    ax.plot(times, loss, linestyle='-', linewidth=4)
+    if times is not None:
+        ax.plot(times, loss, linestyle='-', linewidth=4)
+    else:
+        ax.plot(loss, linestyle='-', linewidth=4)
     ax.set_title('Loss sequence')
     ax.set_ylabel('Loss')
     ax.set_xlabel('time')
     plt.savefig(fig_path)
     ax.set_yscale('log')
     plt.savefig(fig_path + '_ylog')
+    plt.close()
 
-def plot_K_learning(times, K_vec, fig_path):
+def plot_K_learning(K_vec, fig_path, times=None):
     # plot sequence
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12,6))
     for i in range(K_vec.shape[1]):
         for j in range(K_vec.shape[2]):
-            ax.plot(times, K_vec[:,i,j], linestyle='-', linewidth=4, label='K_{i}{j}'.format(i=i,j=j))
+            if times is not None:
+                ax.plot(times, K_vec[:,i,j], linestyle='-', linewidth=4, label='K_{i}{j}'.format(i=i,j=j))
+            else:
+                ax.plot(K_vec[:,i,j], linestyle='-', linewidth=4, label='K_{i}{j}'.format(i=i,j=j))
     ax.set_title('K learning')
     ax.set_ylabel('K')
     ax.set_xlabel('time')
     ax.legend()
     plt.savefig(fig_path)
+    plt.close()
 
 def plot_assimilation_errors(times, error_dict, eps, fig_path):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12,6))
