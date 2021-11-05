@@ -93,7 +93,7 @@ def train_NbedDyn_model_L63(params,model,modelRINN,X_train,Grad_t):
         aug_inp_data = []
         x = torch.from_numpy(X_train).float()
         z = torch.from_numpy(Grad_t).float()
-
+        d_inp = params['dim_input']
 
         criterion = torch.nn.MSELoss(reduction='none')
 
@@ -125,9 +125,10 @@ def train_NbedDyn_model_L63(params,model,modelRINN,X_train,Grad_t):
                 if params['get_latent_train']:
                     aug_inp_data.append(aug_inp.detach())
                 # Compute and print loss
-                loss1 = criterion(grad[:,:1], z[b,:,:]).mean()
-                loss2 = criterion(pred[:-1,1:] , aug_inp[1:,1:]).sum()
-                loss3 = criterion(pred2[:-1,1:] , pred[1:,1:]).sum()
+                # bp()
+                loss1 = criterion(grad[:,:d_inp], z[b,:,:]).mean()
+                loss2 = criterion(pred[:-1,d_inp:] , aug_inp[1:,d_inp:]).sum()
+                loss3 = criterion(pred2[:-1,d_inp:] , pred[1:,d_inp:]).sum()
                 loss =  0.1*loss1+0.9*loss2 + 0.9*loss3
                 if t%1000==0:
                     print('Training L63 NbedDyn model', t,loss)
@@ -151,9 +152,9 @@ def train_NbedDyn_model_L63(params,model,modelRINN,X_train,Grad_t):
                 inp_concat = torch.cat((x[b,:,:], modelRINN.Dyn_net.y_aug[b,:,:]), dim=1)
                 pred, grad, inp, aug_inp = modelRINN(inp_concat,dt)
                 # Compute and print loss
-                loss1 = criterion(grad[:,:1], z[b,:,:]).mean()
-                loss2 = criterion(pred[:-1,:1] , aug_inp[1:,:1]).sum()
-                loss3 = criterion(pred[:-1,1:] , aug_inp[1:,1:]).sum()
+                loss1 = criterion(grad[:,:d_inp], z[b,:,:]).mean()
+                loss2 = criterion(pred[:-1,:d_inp] , aug_inp[1:,:d_inp]).sum()
+                loss3 = criterion(pred[:-1,d_inp:] , aug_inp[1:,d_inp:]).sum()
                 loss =  0.0*loss1+1.0*loss2 + 1.0*loss3
                 if t%1000==0:
                     print('Training L63 NbedDyn model', t,loss)
