@@ -20,6 +20,39 @@ def get_NbedDyn_model(params, use_true_model=False):
                         self.transLayers = torch.nn.ModuleList([torch.nn.Linear(augmented_size, params['dim_latent']+params['dim_observations'])])
                         self.transLayers.extend([torch.nn.Linear(params['dim_latent']+params['dim_observations'], params['dim_latent']+params['dim_observations']) for i in range(1, params['transition_layers'])])
                         #self.outputLayer  = torch.nn.Linear(params['dim_latent']+params['dim_input'], params['dim_latent']+params['dim_input'],bias = False)
+                        self.use_f0 = params['use_f0']
+                        if self.use_f0:
+                            if params['dim_observations']==1:
+                                self.f0 = self.f0_1d
+                            elif params['dim_observations']==2:
+                                self.f0 = self.f0_2d
+
+                    def f0_1d(self, inp):
+                        foo = -10*inp # sigma*(-x)
+                        return foo
+
+                    def f0_2d_bad(self, inp):
+                        foo = torch.zeros(inp.shape)
+                        foo[:,0] = 1*(inp[:,1] - inp[:,0]) #sigma*(y-x)
+                        foo[:,1] = 1*inp[:,0] - 28*inp[:,1] # x*rho - y
+                        return foo
+
+                    def f0_2d(self, inp):
+                        foo = torch.zeros(inp.shape)
+                        foo[:,0] = 10*(inp[:,1] - inp[:,0]) #sigma*(y-x)
+                        foo[:,1] = 28*inp[:,0] - inp[:,1] # x*rho - y
+                        return foo
+
+                    def f_nn(self, aug_inp):
+                        BP_outp = (torch.zeros((aug_inp.size()[0],params['bi_linear_layers'])))
+                        L_outp   = self.linearCell(aug_inp)
+                        for i in range((params['bi_linear_layers'])):
+                            BP_outp[:,i]=self.BlinearCell1[i](aug_inp)[:,0]*self.BlinearCell2[i](aug_inp)[:,0]
+                        aug_vect = torch.cat((L_outp, BP_outp), dim=1)
+                        for i in range((params['transition_layers'])):
+                            aug_vect = (self.transLayers[i](aug_vect))
+                        grad = aug_vect#self.outputLayer(aug_vect)
+                        return grad
 
                     def forward(self, inp, dt):
                         if self.use_true_model:
@@ -57,14 +90,19 @@ def get_NbedDyn_model(params, use_true_model=False):
                             aug_inp = torch.cat((inp, self.y_aug), dim=1)
                         else:
                             aug_inp = inp
-                        BP_outp = (torch.zeros((aug_inp.size()[0],params['bi_linear_layers'])))
-                        L_outp   = self.linearCell(aug_inp)
-                        for i in range((params['bi_linear_layers'])):
-                            BP_outp[:,i]=self.BlinearCell1[i](aug_inp)[:,0]*self.BlinearCell2[i](aug_inp)[:,0]
-                        aug_vect = torch.cat((L_outp, BP_outp), dim=1)
-                        for i in range((params['transition_layers'])):
-                            aug_vect = (self.transLayers[i](aug_vect))
-                        grad = aug_vect#self.outputLayer(aug_vect)
+
+                        if self.use_f0:
+                            grad = self.f0(inp) + self.f_nn(aug_inp)
+                        else:
+                            grad = self.f_nn(aug_inp)
+                        # BP_outp = (torch.zeros((aug_inp.size()[0],params['bi_linear_layers'])))
+                        # L_outp   = self.linearCell(aug_inp)
+                        # for i in range((params['bi_linear_layers'])):
+                        #     BP_outp[:,i]=self.BlinearCell1[i](aug_inp)[:,0]*self.BlinearCell2[i](aug_inp)[:,0]
+                        # aug_vect = torch.cat((L_outp, BP_outp), dim=1)
+                        # for i in range((params['transition_layers'])):
+                        #     aug_vect = (self.transLayers[i](aug_vect))
+                        # grad = aug_vect#self.outputLayer(aug_vect)
                         return grad, aug_inp
         model  = FC_net(params)
 
