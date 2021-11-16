@@ -28,7 +28,18 @@ color_dict = dict(six.iteritems(colors.cnames))
 # sns.set(rc={'text.usetex': True}, font_scale=4)
 
 
-import pdb
+from pdb import set_trace as bp
+
+def plot_training_progress(lossdict, fig_path):
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12,6))
+    for key in lossdict:
+        ax.plot(lossdict[key], label=key)
+    ax.legend()
+    ax.set_xlabel('Epochs')
+    ax.set_ylabel('Loss')
+    ax.set_yscale('log')
+    plt.savefig(fig_path)
+    plt.close()
 
 def make_time_plot(df, x_name='t_warmup', y_name='mse_total'):
     colors = {'EnKF': 'orange', 'ad hoc': 'blue',
@@ -39,10 +50,12 @@ def make_time_plot(df, x_name='t_warmup', y_name='mse_total'):
 
 
 
-def plot_trajectories(times, traj_dict, fig_path):
+def plot_trajectories(traj_dict, fig_path, times=None):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12,6))
     line_vec = {'EnKF': ':', 'Ad hoc': '--', '3DVAR': '-.', '3DVAR pred': '-.'}
 
+    if times is None:
+        times = np.arange(len(list(traj_dict.values())[0]))
     for key in traj_dict:
         if key=='True':
             ax.plot(times, traj_dict[key], linestyle='-', color='black', linewidth=4, label=key)
@@ -115,8 +128,10 @@ def plot_K_learning(K_vec, fig_path, times=None):
     plt.savefig(fig_path)
     plt.close()
 
-def plot_assimilation_errors(times, error_dict, eps, fig_path):
+def plot_assimilation_errors(error_dict, eps, fig_path, times=None):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12,6))
+    if times is None:
+        times = np.arange(len(list(error_dict.values())[0]))
     eps_vec = [eps for _ in range(len(times))]
     line_vec = {'EnKF': ':', 'Ad hoc': '--', '3DVAR': '-.', '3DVAR pred': '-.'}
 

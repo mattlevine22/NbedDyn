@@ -3,10 +3,39 @@ import numpy as np
 import pickle
 import io
 import os
+import json
 from scipy.stats import gaussian_kde, entropy
+from scipy.interpolate import CubicSpline
 from statsmodels.tsa.stattools import acf
 
-import pdb
+from pdb import set_trace as bp
+
+def gradient(X, dt, method='np.gradient'):
+	if method=='np.gradient':
+		xdot = np.gradient(X, axis=0) / dt
+	elif method=='spline':
+		input_dim = X.shape[1]
+		t_vec = dt*np.arange(X.shape[0])
+		x_spline = [CubicSpline(x=t_vec, y=X[:,k]) for k in range(input_dim)]
+		xdot_spline = np.array([CubicSpline(x=t_vec, y=X[:,k]).derivative() for k in range(input_dim)])
+		xdot = np.array([xdot_spline[k](t_vec) for k in range(input_dim)]).T
+	else:
+		raise ValueError('Differentiation method not recognized.')
+	return xdot
+
+def subsample(x, dt_given, dt_subsample):
+	# x: time x dims
+	t_end = dt_given*(x.shape[0]-1)
+	n_stop = int(t_end / dt_given) + 1
+	keep_inds = [int(j) for j in np.arange(0, n_stop, dt_subsample / dt_given)]
+	x_sub = x[keep_inds]
+	return x_sub
+
+
+def file_to_dict(fname):
+	with open(fname) as f:
+		my_dict = json.load(f)
+	return my_dict
 
 def mse(x, y):
 	return np.mean( (x-y)**2 , axis=0)
