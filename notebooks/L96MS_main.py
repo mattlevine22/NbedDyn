@@ -12,7 +12,7 @@ import torch
 from odelibrary        import *
 from dynamical_models   import *
 from generate_data      import *
-from NbedDyn_componentwise2   import *
+from NbedDyn_componentwise3   import *
 # from NbedDyn_componentwise   import *
 from stat_functions     import *
 from computation_utils import *
@@ -65,7 +65,7 @@ def main(eps_exp = -7, N_lat=2):
     #### downsample to specifc training sampling rate
     X_train_chaos_all = subsample(x=X_train_chaos_all, dt_given=GD.dt_hifi_integration, dt_subsample=GD.dt_integration)
 
-    N_train = int(85/GD.dt_integration)
+    N_train = int(100/GD.dt_integration)
     N_test_short = int(5/GD.dt_integration)
     N_test_long = int(10/GD.dt_integration) - 1
 
@@ -98,7 +98,7 @@ def main(eps_exp = -7, N_lat=2):
     params['dim_Embedding']      = N_lat+d_component  # acts component-wise
     params['ntrain']             = [30000,1000]
     params['dt_integration']     = GD.dt_integration
-    params['pretrained']         = False
+    params['pretrained']         = True
     params['nb_batch']           = nb_batch
     params['Batch_size']         = Batch_size
     params['get_latent_train']   = False
@@ -218,7 +218,8 @@ def main(eps_exp = -7, N_lat=2):
 
     ##### now do f0 + markovian + nonMarkovian
     # params['ntrain'] = [1000,1000]
-    params['ntrain'] = [320,100]
+    # params['ntrain'] = [320,100]
+    params['ntrain'] = [3000,1000]
     params['file_name'] += '_nonMark'
 
     model, modelRINN = get_NbedDyn_model(params, use_f0=True, doMark=False, doNonMark=True)
@@ -350,11 +351,12 @@ def main(eps_exp = -7, N_lat=2):
 if __name__ == '__main__':
     # eps_exp = int(sys.argv[1]) # time or noise
     # elist = [-7,-5,-3,-2,-1]
-    # main(eps_exp=-1, N_lat=4)
-    elist = [-1,-3,-5]
-    for eps_exp in elist:
-        for N_lat in [2,4,8]:
-            try:
-                main(eps_exp=eps_exp, N_lat=N_lat)
-            except:
-                pass
+    main(eps_exp=-1, N_lat=8)
+    # elist = [-1,-3,-5,-7]
+    # for eps_exp in elist:
+    #     for N_lat in [8]:
+    #         try:
+    #             main(eps_exp=eps_exp, N_lat=N_lat)
+    #         except:
+    #         #     bp()
+    #             pass
