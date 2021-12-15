@@ -12,13 +12,8 @@ def get_NbedDyn_model(params, use_true_model=False):
                         self.use_true_model = use_true_model
                         y_aug = np.random.uniform(size=(params['nb_batch'],params['Batch_size'],params['dim_latent']))-0.5
                         y_aug[:,:,1:] = 0.0
+                        self.d_obs = params['dim_observations']
                         self.y_aug = torch.nn.Parameter(torch.from_numpy(y_aug).float())
-                        self.linearCell   = torch.nn.Linear(params['dim_latent']+params['dim_observations'], params['dim_hidden_linear'])
-                        self.BlinearCell1 = torch.nn.ModuleList([torch.nn.Linear(params['dim_latent']+params['dim_observations'], 1,bias = False) for i in range(params['bi_linear_layers'])])
-                        self.BlinearCell2 = torch.nn.ModuleList([torch.nn.Linear(params['dim_latent']+params['dim_observations'], 1,bias = False) for i in range(params['bi_linear_layers'])])
-                        augmented_size    = params['bi_linear_layers'] + params['dim_hidden_linear']
-                        self.transLayers = torch.nn.ModuleList([torch.nn.Linear(augmented_size, params['dim_latent']+params['dim_observations'])])
-                        self.transLayers.extend([torch.nn.Linear(params['dim_latent']+params['dim_observations'], params['dim_latent']+params['dim_observations']) for i in range(1, params['transition_layers'])])
                         #self.outputLayer  = torch.nn.Linear(params['dim_latent']+params['dim_input'], params['dim_latent']+params['dim_input'],bias = False)
                         self.use_f0 = params['use_f0']
                         if self.use_f0:
@@ -26,6 +21,26 @@ def get_NbedDyn_model(params, use_true_model=False):
                                 self.f0 = self.f0_1d
                             elif params['dim_observations']==2:
                                 self.f0 = self.f0_2d
+
+                        if params['nn_style']=='paper_rnn':
+                            self.f_nn = self.f_paper_rnn
+                            self.linearCell_Ax = torch.nn.Linear(params['dim_observations'], params['dim_latent'], bias=True)
+                            self.linearCell_Br = torch.nn.Linear(params['dim_latent'], params['dim_latent'], bias=False)
+                            self.activation    = torch.nn.ReLU()
+                            self.linearCell_Cr = torch.nn.Linear(params['dim_latent'], params['dim_observations'], bias=False)
+                        elif params['nn_style']=='shallow':
+                            self.f_nn = self.f_shallow_nn
+                            self.linearCell_in   = torch.nn.Linear(params['dim_latent']+params['dim_observations'], params['dim_hidden_linear'], bias=True) #1st layer
+                            self.activation   = torch.nn.ReLU()
+                            self.linearCell_out   = torch.nn.Linear(params['dim_hidden_linear'], params['dim_latent']+params['dim_observations'], bias=False) #output layer
+                        else:
+                            self.f_nn = self.f_deep_bilinear
+                            self.linearCell   = torch.nn.Linear(params['dim_latent']+params['dim_observations'], params['dim_hidden_linear'])
+                            self.BlinearCell1 = torch.nn.ModuleList([torch.nn.Linear(params['dim_latent']+params['dim_observations'], 1,bias = False) for i in range(params['bi_linear_layers'])])
+                            self.BlinearCell2 = torch.nn.ModuleList([torch.nn.Linear(params['dim_latent']+params['dim_observations'], 1,bias = False) for i in range(params['bi_linear_layers'])])
+                            augmented_size    = params['bi_linear_layers'] + params['dim_hidden_linear']
+                            self.transLayers = torch.nn.ModuleList([torch.nn.Linear(augmented_size, params['dim_latent']+params['dim_observations'])])
+                            self.transLayers.extend([torch.nn.Linear(params['dim_latent']+params['dim_observations'], params['dim_latent']+params['dim_observations']) for i in range(1, params['transition_layers'])])
 
                     def f0_1d(self, inp):
                         foo = -10*inp # sigma*(-x)
@@ -43,7 +58,18 @@ def get_NbedDyn_model(params, use_true_model=False):
                         foo[:,1] = 28*inp[:,0] - inp[:,1] # x*rho - y
                         return foo
 
-                    def f_nn(self, aug_inp):
+                    def f_shallow_nn(self, aug_inp):
+                        return self.linearCell_out(self.activation(self.linearCell_in(aug_inp)))
+
+                    def f_paper_rnn(self, aug_inp):
+                        Ax = self.linearCell_Ax(aug_inp[:, :self.d_obs])
+                        Br = self.linearCell_Br(aug_inp[:, self.d_obs:])
+                        rdot = self.activation(Ax + Br)
+                        Cr = self.linearCell_Cr(aug_inp[:, self.d_obs:])
+                        grad = torch.cat((Cr,rdot), dim=1)
+                        return grad
+
+                    def f_deep_bilinear(self, aug_inp):
                         BP_outp = (torch.zeros((aug_inp.size()[0],params['bi_linear_layers'])))
                         L_outp   = self.linearCell(aug_inp)
                         for i in range((params['bi_linear_layers'])):
@@ -53,6 +79,15 @@ def get_NbedDyn_model(params, use_true_model=False):
                             aug_vect = (self.transLayers[i](aug_vect))
                         grad = aug_vect#self.outputLayer(aug_vect)
                         return grad
+
+                    def rhs(self, aug_inp, dt):
+                        '''This function is exclusively for solving the system post-training. For use with solve_ivp.'''
+                        aug_inp = torch.FloatTensor(aug_inp).reshape(1,-1)
+                        # grad = torch.zeros(aug_inp.shape)
+                        grad = self.f_nn(aug_inp)
+                        if self.use_f0:
+                            grad += self.f0(aug_inp[:self.d_obs])
+                        return np.squeeze(grad.data.numpy())
 
                     def forward(self, inp, dt):
                         if self.use_true_model:
@@ -165,9 +200,14 @@ def train_NbedDyn_model_L63(params,model,modelRINN,X_train,Grad_t):
                 # Compute and print loss
                 # bp()
                 loss1 = criterion(grad[:,:d_inp], z[b,:,:]).mean()
-                loss2 = criterion(pred[:-1,d_inp:] , aug_inp[1:,d_inp:]).sum()
-                loss3 = criterion(pred2[:-1,d_inp:] , pred[1:,d_inp:]).sum()
-                loss =  0.1*loss1+0.9*loss2 + 0.9*loss3
+
+                # the below terms are mostly needed on the hidden dimension
+                # because in the observed components, they are similar to matching gradients as above
+                # In fact, they are equivalent if Forward Euler were used instead of RK45
+                loss2 = criterion(pred[:-1,d_inp:] , aug_inp[1:,d_inp:]).mean() # fit 1-step forward integrator on original data in AUG space
+                loss3 = criterion(pred2[:-1,d_inp:] , pred[1:,d_inp:]).mean() # fit 1-step forward integrator on step-forward of original data in AUG space
+                loss =  0.1*loss1 + 8000*0.9*loss2 + 8000*0.9*loss3
+                # loss =  0.1*loss1 #+0.9*loss2 + 0.9*loss3
                 if t%1000==0:
                     print('Training L63 NbedDyn model', t,loss)
                 torch.save(modelRINN.state_dict(), params['path'] + params['file_name']+'.pt')
@@ -182,6 +222,7 @@ def train_NbedDyn_model_L63(params,model,modelRINN,X_train,Grad_t):
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = 0.001
 
+        # bp()
         for param_group in optimizer.param_groups:
                 param_group['lr'] = 0.001
         for t in range(0,params['ntrain'][1]):
